@@ -129,7 +129,7 @@ void action(public_key *out, public_key const *in, private_key const *priv)
 
     for (size_t i = 0; i < num_primes; ++i) {
 
-        int8_t t = (int8_t) (priv->e[i / 2] << i % 2 * 4) >> 4;
+        int8_t t = (int8_t)(priv->e[i / 2] << i % 2 * 4) >> 4;
 
         if (t > 0) {
             e[0][i] = t;

@@ -1,24 +1,75 @@
 #include "arith.h"
 #include <assert.h>
+#include <fcntl.h>
+#include <string.h>
+#include <unistd.h>
+#include <stdlib.h>
+
+
 
 ///////////////////  Field Arithmetic  /////////////////////
 
-uint64_t prime511[8] = { 0x1b81b90533c6c87b, 0xc2721bf457aca835,
+uint64_t prime511[NWORDS_64] = { 0x1b81b90533c6c87b, 0xc2721bf457aca835,
                          0x516730cc1f0b4f25, 0xa7aac6c567f35507,
                          0x5afbfcc69322c9cd, 0xb42d083aedc88c42,
                          0xfc8ab0d15e3e4c4a, 0x65b48e8f740f89bf };
 
-uint64_t r2_Mont[8] = { 0x36905b572ffc1724, 0x67086f4525f1f27d,
+uint64_t r2_Mont[NWORDS_64] = { 0x36905b572ffc1724, 0x67086f4525f1f27d,
                         0x4faf3fbfd22370ca, 0x192ea214bcc584b1,
                         0x5dae03ee2f5de3d0, 0x1e9248731776b371,
                         0xad5f166e20e4f52d, 0x4ed759aea6f3917e };
 
-uint64_t one_Mont[8] = { 0xc8fc8df598726f0a, 0x7b1bc81750a6af95, 
+uint64_t one_Mont[NWORDS_64] = { 0xc8fc8df598726f0a, 0x7b1bc81750a6af95, 
                          0x5d319e67c1e961b4, 0xb0aa7275301955f1,
                          0x4a080672d9ba6c64, 0x97a5ef8a246ee77b,
                          0x06ea9e5d4383676a, 0x3496e2e117e0ec80 };
 
-uint64_t zero[8] = {0};
+uint64_t zero[NWORDS_64] = {0};
+
+const uint64_t smallprimes[SMALL_PRIMES_COUNT] = {
+      3,   5,   7,  11,  13,  17,  19,  23,  29,  31,  37,  41,  43,  47,  53,  59,
+     61,  67,  71,  73,  79,  83,  89,  97, 101, 103, 107, 109, 113, 127, 131, 137,
+    139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227,
+    229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307, 311, 313,
+    317, 331, 337, 347, 349, 353, 359, 367, 373, 587,
+};
+
+const uint64_t four_sqrt_p[8] = { 0x85e2579c786882cf, 0x4e3433657e18da95,
+                                  0x850ae5507965a0b3, 0xa15bc4e676475964,
+                                  0x0000000000000000, 0x0000000000000000,
+                                  0x0000000000000000, 0x0000000000000000};
+
+void mp_U512_set_zero(uint64_t *a)
+{
+    int i;
+    for(i = 0; i < NWORDS_64; i++)
+    {
+        a[i] = 0;
+    }
+}
+
+void mp_U512_set_one(uint64_t *a)
+{
+    int i;
+    for(i = 0; i < NWORDS_64; i++)
+    {
+        a[i] = 0;
+    }
+    a[0] = 1;
+}
+
+void fp_random_512(uint64_t *a)
+{
+    static int fd = -1;
+    int n, i;
+    if (fd < 0 && 0 > (fd = open("/dev/urandom", O_RDONLY)))
+        exit(1);
+    for (i = 0; i < NWORDS_64 * 8; i += n)
+        if (0 >= (n = read(fd, (char *) a + i, (NWORDS_64 * 8) - i)))
+            exit(2);
+    a[7] &= 0x3FFFFFFFFFFFFFFF;
+}
+
 
 void fp_sqr_mont_512(const uint64_t *a, uint64_t *c){
     fp_mul_mont_512(a, a, c);
@@ -31,20 +82,34 @@ void fp_cpy(const uint64_t *a, uint64_t *c)
         c[i] = a[i];
 }
 
+void fp_init_zero(uint64_t *a)
+{
+    int i;
+    for(i = 0; i < NWORDS_64; i++)
+        a[i] = 0;
+}
+
+void fp_init_one(uint64_t *a)
+{
+    int i;
+    for(i = 0 ; i < NWORDS_64; i++)
+        a[i] = 0;
+    a[0] = 1;
+}
+
 void fp_inv(uint64_t *a)
 {
-    // Field inversion using FLT chain
+    // Field inversion using addition chain
     felm_t tmp[28], t;
     int i;
 
-    // Table
+    // Pre-computed Table
     // tmp0->a3     tmp1->a5    tmp2->a11   tmp3->a13   tmp4->a15
     // tmp5->a17    tmp6->a19   tmp7->a21   tmp8->a25   tmp9->a27
     // tmp10->a29   tmp11->a31  tmp12->a33  tmp13->a35  tmp14->a37
     // tmp15->a39   tmp16->a41  tmp17->a43  tmp18->a45  tmp19->a47
     // tmp20->a49   tmp21->a51  tmp22->a53  tmp23->a55  tmp24->a57
     // tmp25->a59   tmp26->a61  tmp27->a63    
-    
     fp_sqr_mont_512(a, t);
     fp_mul_mont_512(a, t, tmp[0]);
     fp_mul_mont_512(t, tmp[0], tmp[1]);
@@ -113,7 +178,7 @@ void fp_inv(uint64_t *a)
     fp_mul_mont_512(tmp[12], t, t);
     for(i = 0; i < 8; i++) fp_sqr_mont_512(t, t);
     fp_mul_mont_512(tmp[18], t, t);
-    for(i = 0; i < 5; i++) fp_sqr_mont_512(t, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
     fp_mul_mont_512(tmp[11], t, t);
     for(i = 0; i < 7; i++) fp_sqr_mont_512(t, t);
     fp_mul_mont_512(tmp[27], t, t);
@@ -206,6 +271,178 @@ void fp_inv(uint64_t *a)
     fp_cpy(t, a);
 }
 
+bool fp_issquare(const uint64_t *a)
+{
+    // Square-root check using addition chain
+    felm_t tmp[27], t;
+    int i;
+    
+    // Pre-computed Table
+    // tmp0->a3     tmp1->a5    tmp2->a13   tmp3->a15   tmp4->a17
+    // tmp5->a19    tmp6->a21   tmp7->a25   tmp8->a27   tmp9->a29
+    // tmp10->a31   tmp11->a33  tmp12->a35  tmp13->a37  tmp14->a39
+    // tmp15->a41   tmp16->a43  tmp17->a45  tmp18->a47  tmp19->a49
+    // tmp20->a51   tmp21->a53  tmp22->a55  tmp23->a57  tmp24->a59
+    // tmp25->a61   tmp26->a63
+    fp_sqr_mont_512(a, t);
+    fp_mul_mont_512(a, t, tmp[0]);
+    fp_mul_mont_512(t, tmp[0], tmp[1]);
+    fp_sqr_mont_512(tmp[1], tmp[2]);
+    fp_mul_mont_512(tmp[2], tmp[0], tmp[2]);
+    for(i = 2; i <= 5; i++ )
+        fp_mul_mont_512(t, tmp[i], tmp[i+1]);
+    fp_mul_mont_512(tmp[6], t, tmp[7]);
+    fp_mul_mont_512(tmp[7], t, tmp[7]);
+    for(i = 7; i <= 25; i++)
+        fp_mul_mont_512(t, tmp[i], tmp[i+1]);
+    
+    fp_cpy(a, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[13], t, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[17], t, t);
+    for(i = 0; i < 8; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[12], t, t);
+    for(i = 0; i < 3; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[1], t, t);
+    for(i = 0; i < 9; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[25], t, t);
+    for(i = 0; i < 4; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[2], t, t);
+    for(i = 0; i < 11; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[10], t, t);
+    for(i = 0; i < 8; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[5], t, t);
+    for(i = 0; i < 7; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[26], t, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[26], t, t);
+    for(i = 0; i < 7; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[4], t, t);
+    for(i = 0; i < 7; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[16], t, t);
+    for(i = 0; i < 8; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[2], t, t);
+    for(i = 0; i < 9; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[16], t, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[19], t, t);
+    for(i = 0; i < 4; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[3], t, t);
+    for(i = 0; i < 7; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[5], t, t);
+    for(i = 0; i < 9; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[13], t, t);
+    for(i = 0; i < 7; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[17], t, t);
+    for(i = 0; i < 10; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[17], t, t);
+    for(i = 0; i < 5; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(a, t, t);
+    for(i = 0; i < 10; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[9], t, t);
+    for(i = 0; i < 7; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[24], t, t);
+    for(i = 0; i < 7; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[23], t, t);
+    for(i = 0; i < 9; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[12], t, t);
+    for(i = 0; i < 9; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[11], t, t);
+    for(i = 0; i < 8; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[17], t, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[10], t, t);
+    for(i = 0; i < 7; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[26], t, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[20], t, t);
+    for(i = 0; i < 7; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[2], t, t);
+    for(i = 0; i < 7; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[5], t, t);
+    for(i = 0; i < 7; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[4], t, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[7], t, t);
+    for(i = 0; i < 8; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[23], t, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[17], t, t);
+    for(i = 0; i < 8; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[25], t, t);
+    for(i = 0; i < 7; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[16], t, t);
+    for(i = 0; i < 8; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[8], t, t);
+    for(i = 0; i < 9; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[16], t, t);
+    for(i = 0; i < 8; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[26], t, t);
+    for(i = 0; i < 5; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[5], t, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[6], t, t);
+    for(i = 0; i < 2; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(a, t, t);
+    for(i = 0; i < 10; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[9], t, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[4], t, t);
+    for(i = 0; i < 7; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[20], t, t);
+    for(i = 0; i < 5; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[5], t, t);
+    for(i = 0; i < 10; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[20], t, t);
+    for(i = 0; i < 10; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[10], t, t);
+    for(i = 0; i < 10; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[17], t, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[3], t, t);
+    for(i = 0; i < 8; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[13], t, t);
+    for(i = 0; i < 2; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[0], t, t);
+    for(i = 0; i < 10; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[14], t, t);
+    for(i = 0; i < 8; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[11], t, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[18], t, t);
+    for(i = 0; i < 4; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[2], t, t);
+    for(i = 0; i < 9; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[16], t, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[21], t, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[13], t, t);
+    for(i = 0; i < 2; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(a, t, t);
+    for(i = 0; i < 11; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[21], t, t);
+    for(i = 0; i < 9; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[22], t, t);
+    for(i = 0; i < 12; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[22], t, t);
+    for(i = 0; i < 3; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(a, t, t);
+    for(i = 0; i < 11; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[15], t, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[14], t, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[12], t, t);
+    for(i = 0; i < 6; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[7], t, t);
+    for(i = 0; i < 10; i++) fp_sqr_mont_512(t, t);
+    fp_mul_mont_512(tmp[25], t, t);
+
+    return (memcmp(t, one_Mont, sizeof(felm_t)) == 0) ? true : false;
+}   
+
 void to_mont(const uint64_t *in, uint64_t *out)
 {
     fp_mul_mont_512(in, r2_Mont, out);
@@ -218,8 +455,18 @@ void from_mont(const uint64_t *in, uint64_t *out)
     fp_mul_mont_512(in, one, out);
 }
 
-//////////////// Group Arithmetic ////////////////////////
+void fp_print(uint64_t *a)
+{
+    int i;
+    printf("\n");
+    for(i = 7; i >= 0; i--)
+    {
+        printf("%lx", a[i]);
+    }
+    printf("\n");    
+}
 
+//////////////// Group Arithmetic ////////////////////////
 void xDBLADD(proj_point_t R, proj_point_t S, const proj_point_t P, const proj_point_t Q, const proj_point_t PQ, const proj_point_t A)
 {
     felm_t t0, t1, t2, t3;
@@ -228,15 +475,15 @@ void xDBLADD(proj_point_t R, proj_point_t S, const proj_point_t P, const proj_po
     fp_sub_512(Q->X, Q->Z, t1);
     fp_add_512(P->X, P->Z, t2);
     fp_sub_512(P->X, P->Z, t3);
-    fp_sqr_mont_512(R->X, t2);
-    fp_sqr_mont_512(S->X, t3);
+    fp_sqr_mont_512(t2, R->X);
+    fp_sqr_mont_512(t3, S->X);
     fp_mul_mont_512(t1, t2, t2);
     fp_mul_mont_512(t0, t3, t3);
     fp_sub_512(R->X, S->X, t1);
-    fp_add_512(A->Z, A->Z, t0); /* multiplication by 2 */
+    fp_add_512(A->Z, A->Z, t0); // 2*Z
     fp_mul_mont_512(t0, S->X, R->Z);
     fp_add_512(A->X, t0, S->X);
-    fp_add_512(R->Z, R->Z, R->Z); /* multiplication by 2 */
+    fp_add_512(R->Z, R->Z, R->Z); // 2*Z
     fp_mul_mont_512(R->X, R->Z, R->X);
     fp_mul_mont_512(t1, S->X, S->X);
     fp_sub_512(t2, t3, S->Z);
@@ -287,27 +534,31 @@ void xADD(proj_point_t S, const proj_point_t P, const proj_point_t Q, const proj
     fp_mul_mont_512(PQ->X, t3, S->Z);
 }
 
-void point_swap(proj_point_t R, proj_point_t Q, bool swap_bit)
+/*
+static void swap_points(proj_point_t P, proj_point_t Q, const uint64_t mask)
 {
-    proj_point_t tmp;
-    if(swap_bit)
-    {
-        fp_cpy(Q->X, tmp->X);
-        fp_cpy(Q->Z, tmp->Z);
-        fp_cpy(R->X, Q->X);
-        fp_cpy(R->Z, Q->Z);
-        fp_cpy(tmp->X, R->X);
-        fp_cpy(tmp->Z, R->Z);
+  // Constant-time point swap   
+  // mask = 0 then P <- P and Q <- Q
+  // mask = 0xFF...FF then P <- Q and Q <- P
+    uint64_t temp;
+    unsigned int i;
+
+    for (i = 0; i < 8; i++) {
+        temp = mask & (P->X[i] ^ Q->X[i]);
+        P->X[i] = temp ^ P->X[i]; 
+        Q->X[i] = temp ^ Q->X[i]; 
+        temp = mask & (P->Z[i] ^ Q->Z[i]);
+        P->Z[i] = temp ^ P->Z[i]; 
+        Q->Z[i] = temp ^ Q->Z[i]; 
     }
 }
 
 
-/* Montgomery ladder. */
-/* P must not be the unique point of order 2. */
-/* not constant-time! */
-/*
+
 void xMUL(proj_point_t Q, const proj_point_t A, const proj_point_t P, const UINT512_t k)
 {
+    // Constant-time Montgomery ladder
+
     proj_point_t R;
     proj_point_t Pcopy; // in case Q = P 
 
@@ -316,27 +567,74 @@ void xMUL(proj_point_t Q, const proj_point_t A, const proj_point_t P, const UINT
     fp_cpy(P->X, Pcopy->X);
     fp_cpy(P->Z, Pcopy->Z);
 
+    fp_cpy(one_Mont, Q->X);
+    fp_cpy(zero, Q->Z);
+
+    int i, bit, swap, prevbit = 0, nbits = 512;
+    uint64_t mask;
+
+    for(i = 0; i < nbits; i++)
+    {
+        bit = (k[i >> 6] >> (i & (63))) & 1;
+        swap = bit ^ prevbit;
+        prevbit = bit;
+        mask = 0 - (uint64_t)swap;
+
+        swap_points(R, Q, mask);
+        xDBLADD(Q, R, Q, R, Pcopy, A);
+        swap_points(R, Q, mask);
+    }
+}
+*/
+bool mp_U512_bit(const uint64_t *a, uint64_t k)
+{
+    return (a[k >> 6] >> (k & (63))) & 1;
+}
+
+void xMUL(proj_point_t Q, const proj_point_t A, const proj_point_t P, const UINT512_t k)
+{
+    proj_point_t R;
+    fp_cpy(P->X, R->X);
+    fp_cpy(P->Z, R->Z);
+
+    proj_point_t Pcopy; // in case Q = P 
+    fp_cpy(P->X, Pcopy->X);
+    fp_cpy(P->Z, Pcopy->Z);
 
     fp_cpy(one_Mont, Q->X);
     fp_cpy(zero, Q->Z);
 
-    unsigned long i = 512;
+    uint64_t i = 512;
+    while(--i && !mp_U512_bit(k, i));
 
-    // TODO: make it using a foor loop
-    // TODO: implement u512_bit: it returns the bit value of k at position i
-    while (--i && !u512_bit(k, i));
+    proj_point_t tmp;
+    do
+    {
+        bool bit = mp_U512_bit(k, i);
+        if(bit)
+        {
+            fp_cpy(Q->X, tmp->X);fp_cpy(Q->Z, tmp->Z);
+            fp_cpy(R->X, Q->X);fp_cpy(R->Z, Q->Z);
+            fp_cpy(tmp->X, R->X);fp_cpy(tmp->Z, R->Z);
+        }
 
-    do {
-        bool bit = u512_bit(k, i);
-        point_swap(R, Q, bit);
         xDBLADD(Q, R, Q, R, Pcopy, A);
-        point_swap(R, Q, bit);
+        
+        if(bit)
+        {
+            fp_cpy(Q->X, tmp->X);fp_cpy(Q->Z, tmp->Z);
+            fp_cpy(R->X, Q->X);fp_cpy(R->Z, Q->Z);
+            fp_cpy(tmp->X, R->X);fp_cpy(tmp->Z, R->Z);
+        }
+
     } while (i--);
 }
 
+
 /* computes the isogeny with kernel point K of order k */
 /* returns the new curve coefficient A and the image of P */
-/* (obviously) not constant time in k 
+// (obviously) not constant time in k 
+
 void xISOG(proj_point_t A, proj_point_t P, const proj_point_t K, uint64_t k)
 {
     assert (k >= 3);
@@ -429,4 +727,3 @@ void xISOG(proj_point_t A, proj_point_t P, const proj_point_t K, uint64_t k)
     fp_mul_mont_512(P->X, Q->X, P->X);
     fp_mul_mont_512(P->Z, Q->Z, P->Z);
 }
-*/

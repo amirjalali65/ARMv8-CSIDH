@@ -2,7 +2,9 @@
 *   Efficient implementation of finite field arithmetic over p511 on ARMv8
 *                   Constant-time Implementation of CSIDH
 *
-*   Amir Jalali                     ajalali2016@fau.edu
+*   Author: Amir Jalali                     ajalali2016@fau.edu
+*   All rights reserved
+*   
 *****************************************************************************/
 .data
 p511:
@@ -105,6 +107,20 @@ minus_p511_inverse:
     adc     x4, x4, xzr
 .endm
 
+.macro stack_pointer_st
+    sub     sp, sp, #48
+    stp     x15, x16, [sp]
+    stp     x17, x18, [sp, #16]
+    stp     x19, x20, [sp, #32]
+.endm
+
+.macro stack_pointer_ld
+    ldp     x15, x16, [sp]
+    ldp     x17, x18, [sp, #16]
+    ldp     x19, x20, [sp, #32]
+    add     sp, sp, #48
+.endm
+
 .global fp_add_512
 .global fp_sub_512
 .global mp_add_512
@@ -112,8 +128,9 @@ minus_p511_inverse:
 .global mp_mul_u64
 .global fp_mul_mont_512
 
-
 fp_add_512:
+    stack_pointer_st
+
     ldp     x3, x4,   [x0]
     ldp     x5, x6,   [x0,#16]
     ldp     x7, x8,   [x0,#32]
@@ -174,9 +191,12 @@ fp_add_512:
     stp     x7, x8, [x2,#32]
     stp     x9, x10, [x2,#48]
     
+    stack_pointer_ld
     ret
 
 fp_sub_512:
+    stack_pointer_st
+
     ldp     x3, x4,   [x0]
     ldp     x5, x6,   [x0,#16]
     ldp     x7, x8,   [x0,#32]
@@ -228,9 +248,12 @@ fp_sub_512:
     stp     x7, x8, [x2,#32]
     stp     x9, x10, [x2,#48]
     
+    stack_pointer_ld
     ret
 
 mp_add_512:
+    stack_pointer_st
+
     ldp     x3, x4,   [x0]
     ldp     x5, x6,   [x0,#16]
     ldp     x7, x8,   [x0,#32]
@@ -255,10 +278,13 @@ mp_add_512:
     stp     x7, x8, [x2,#32]
     stp     x9, x10, [x2,#48]
     
+    stack_pointer_ld
     ret
 
 // TODO: Check if negative results need to be implemented in constant-time
 mp_sub_512:
+    stack_pointer_st
+
     ldp     x3, x4,   [x0]
     ldp     x5, x6,   [x0,#16]
     ldp     x7, x8,   [x0,#32]
@@ -276,46 +302,49 @@ mp_sub_512:
     sbcs    x7, x7, x15
     sbcs    x8, x8, x16
     sbcs    x9, x9, x17
-    sbc    x10, x10, x18
+    sbcs    x10, x10, x18
+    mov     x0, #0
+    sbc     x0, x0, x0
 
     stp     x3, x4, [x2]
     stp     x5, x6, [x2,#16]
     stp     x7, x8, [x2,#32]
     stp     x9, x10, [x2,#48]
     
+    stack_pointer_ld
     ret
 
 mp_mul_u64:
+    stack_pointer_st
+
     ldp     x3, x4,   [x0]
     ldp     x5, x6,   [x0,#16]
     ldp     x7, x8,   [x0,#32]
     ldp     x9, x10,  [x0,#48]
     
-    ldr     x11, [x1]
+    mul     x12, x3, x1
+    umulh   x13, x3, x1
 
-    mul     x12, x3, x11
-    umulh   x13, x3, x11
+    mul     x14, x4, x1
+    umulh   x15, x4, x1         
 
-    mul     x14, x4, x11
-    umulh   x15, x4, x11         
+    mul     x16, x5, x1
+    umulh   x17, x5, x1         
 
-    mul     x16, x5, x11
-    umulh   x17, x5, x11         
+    mul     x18, x6, x1
+    umulh   x19, x6, x1         
 
-    mul     x18, x6, x11
-    umulh   x19, x6, x11         
+    mul     x20, x7, x1
+    umulh   x21, x7, x1         
 
-    mul     x20, x7, x11
-    umulh   x21, x7, x11         
+    mul     x22, x8, x1
+    umulh   x23, x8, x1         
 
-    mul     x22, x8, x11
-    umulh   x23, x8, x11         
+    mul     x24, x9, x1
+    umulh   x25, x9, x1         
 
-    mul     x24, x9, x11
-    umulh   x25, x9, x11         
-
-    mul     x26, x10, x11
-    umulh   x27, x10, x11
+    mul     x26, x10, x1
+    umulh   x27, x10, x1
 
     adds    x13, x13, x14
     adcs    x15, x15, x16
@@ -326,18 +355,18 @@ mp_mul_u64:
     adcs    x25, x25, x26
     adc     x27, xzr, xzr 
 
-    stp     x13, x15, [x2]
-    stp     x17, x19, [x2, #16]
-    stp     x21, x23, [x2, #32]
-    stp     x25, x27, [x2, #48]
+    stp     x12, x13, [x2]
+    stp     x15, x17, [x2, #16]
+    stp     x19, x21, [x2, #32]
+    stp     x23, x25, [x2, #48]
+
+    stack_pointer_ld
 
     ret        
 
+
 fp_mul_mont_512:
-    sub     sp, sp, #48
-    stp     x15, x16, [sp]
-    stp     x17, x18, [sp, #16]
-    stp     x19, x20, [sp, #32]
+    stack_pointer_st
 
     // 0
     ldp     x3, x4, [x0]
@@ -658,7 +687,7 @@ fp_mul_mont_512:
     mul     x28, x28, x21
 
     schoolbook_compact_registers_second
-    
+
     adds    x21, x21, x10
     adcs    x23, x23, x12   // mc0
     adcs    x8, x8, x16     // mc1
@@ -712,10 +741,7 @@ fp_mul_mont_512:
     stp     x13, x15, [x2, #32]
     stp     x17, x19, [x2, #48]
 
-    ldp     x15, x16, [sp]
-    ldp     x17, x18, [sp, #16]
-    ldp     x19, x20, [sp, #32]
-    add     sp, sp, #48
+    stack_pointer_ld
 
     ret
 

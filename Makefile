@@ -21,7 +21,18 @@ debug:
 		csidh.c \
 		main.c \
 		-o main
+arm_64:
+	aarch64-linux-gnu-gcc \
+		-std=c99 -static \
+		-Wall -Wextra	\
+		-O3	-funroll-loops	\
+		rng.c \
+		arith.c \
+		arith.S	\
+		csidh_api.c \
+		csidh_test.c \
+		-o CSIDH_test
 
 clean:
-	rm -f main
+	rm -f main 
 
