@@ -1,3 +1,12 @@
+/****************************************************************************
+*   Efficient implementation of finite field arithmetic over p511 on ARMv8
+*                   Constant-time Implementation of CSIDH
+*
+*   Author: Amir Jalali                     ajalali2016@fau.edu
+*                       
+*                       All rights reserved   
+*****************************************************************************/
+
 #include <stdio.h>
 #include <string.h>
 #include "arith.h"

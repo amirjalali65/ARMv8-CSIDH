@@ -1,3 +1,12 @@
+/****************************************************************************
+*   Efficient implementation of finite field arithmetic over p511 on ARMv8
+*                   Constant-time Implementation of CSIDH
+*
+*   Author: Modified by Amir Jalali                     ajalali2016@fau.edu
+*                       
+*                       All rights reserved   
+*****************************************************************************/
+
 #include "arith.h"
 #include <assert.h>
 #include <fcntl.h>
@@ -534,8 +543,8 @@ void xADD(proj_point_t S, const proj_point_t P, const proj_point_t Q, const proj
     fp_mul_mont_512(PQ->X, t3, S->Z);
 }
 
-/*
-static void swap_points(proj_point_t P, proj_point_t Q, const uint64_t mask)
+
+void swap_points(proj_point_t P, proj_point_t Q, const uint64_t mask)
 {
   // Constant-time point swap   
   // mask = 0 then P <- P and Q <- Q
@@ -543,7 +552,8 @@ static void swap_points(proj_point_t P, proj_point_t Q, const uint64_t mask)
     uint64_t temp;
     unsigned int i;
 
-    for (i = 0; i < 8; i++) {
+    for (i = 0; i < NWORDS_64; i++) 
+    {
         temp = mask & (P->X[i] ^ Q->X[i]);
         P->X[i] = temp ^ P->X[i]; 
         Q->X[i] = temp ^ Q->X[i]; 
@@ -553,89 +563,78 @@ static void swap_points(proj_point_t P, proj_point_t Q, const uint64_t mask)
     }
 }
 
-
-
-void xMUL(proj_point_t Q, const proj_point_t A, const proj_point_t P, const UINT512_t k)
-{
-    // Constant-time Montgomery ladder
-
-    proj_point_t R;
-    proj_point_t Pcopy; // in case Q = P 
-
-    fp_cpy(P->X, R->X);
-    fp_cpy(P->Z, R->Z);
-    fp_cpy(P->X, Pcopy->X);
-    fp_cpy(P->Z, Pcopy->Z);
-
-    fp_cpy(one_Mont, Q->X);
-    fp_cpy(zero, Q->Z);
-
-    int i, bit, swap, prevbit = 0, nbits = 512;
-    uint64_t mask;
-
-    for(i = 0; i < nbits; i++)
-    {
-        bit = (k[i >> 6] >> (i & (63))) & 1;
-        swap = bit ^ prevbit;
-        prevbit = bit;
-        mask = 0 - (uint64_t)swap;
-
-        swap_points(R, Q, mask);
-        xDBLADD(Q, R, Q, R, Pcopy, A);
-        swap_points(R, Q, mask);
-    }
-}
-*/
-bool mp_U512_bit(const uint64_t *a, uint64_t k)
+int mp_U512_bit(const uint64_t *a, uint64_t k)
 {
     return (a[k >> 6] >> (k & (63))) & 1;
 }
 
-void xMUL(proj_point_t Q, const proj_point_t A, const proj_point_t P, const UINT512_t k)
+// Montgomery ladder implementation 
+// Constant-time and non constant-time
+void xMUL(proj_point_t Q, const proj_point_t A,  proj_point_t P, const UINT512_t k)
 {
-    proj_point_t R;
+    proj_point_t R, tmp, Pcopy;
     fp_cpy(P->X, R->X);
     fp_cpy(P->Z, R->Z);
+    fp_cpy(P->X, tmp->X);
+    fp_cpy(P->Z, tmp->Z);
 
-    proj_point_t Pcopy; // in case Q = P 
+
     fp_cpy(P->X, Pcopy->X);
     fp_cpy(P->Z, Pcopy->Z);
 
     fp_cpy(one_Mont, Q->X);
     fp_cpy(zero, Q->Z);
 
-    uint64_t i = 512;
-    while(--i && !mp_U512_bit(k, i));
+    uint64_t bit, nbits = 512;
 
-    proj_point_t tmp;
-    do
+#ifdef CONSTANT
+    int i;
+    while(--nbits && !mp_U512_bit(k, nbits))
     {
-        bool bit = mp_U512_bit(k, i);
-        if(bit)
-        {
-            fp_cpy(Q->X, tmp->X);fp_cpy(Q->Z, tmp->Z);
-            fp_cpy(R->X, Q->X);fp_cpy(R->Z, Q->Z);
-            fp_cpy(tmp->X, R->X);fp_cpy(tmp->Z, R->Z);
-        }
+        //bit = mp_U512_bit(k, nbits);
+        
+        //swap_points(Q, R, (0 - (uint64_t)bit));
+        
+        //xDBLADD(tmp, tmp, tmp, tmp, tmp, A);
+        
+        //swap_points(Q, R, (0 - (uint64_t)bit));
+    }
 
+    for(i = nbits; i >= 0; i--)
+    {
+        bit = mp_U512_bit(k, i);
+        
+        swap_points(Q, R, (0 - (uint64_t)bit));
+        
         xDBLADD(Q, R, Q, R, Pcopy, A);
         
+        swap_points(Q, R, (0 - (uint64_t)bit));
+    }
+#else
+
+    while(--nbits && !mp_U512_bit(k, nbits));
+
+    do
+    {
+        bit = mp_U512_bit(k, nbits);
         if(bit)
         {
             fp_cpy(Q->X, tmp->X);fp_cpy(Q->Z, tmp->Z);
             fp_cpy(R->X, Q->X);fp_cpy(R->Z, Q->Z);
             fp_cpy(tmp->X, R->X);fp_cpy(tmp->Z, R->Z);
         }
-
-    } while (i--);
+        xDBLADD(Q, R, Q, R, Pcopy, A);
+        if(bit)
+        {
+            fp_cpy(Q->X, tmp->X);fp_cpy(Q->Z, tmp->Z);
+            fp_cpy(R->X, Q->X);fp_cpy(R->Z, Q->Z);
+            fp_cpy(tmp->X, R->X);fp_cpy(tmp->Z, R->Z);
+        }
+    } while (nbits--);
+#endif
 }
 
-
-/* computes the isogeny with kernel point K of order k */
-/* returns the new curve coefficient A and the image of P */
-// (obviously) not constant time in k 
-
-void xISOG(proj_point_t A, proj_point_t P, const proj_point_t K, uint64_t k)
+void xISOG(proj_point_t A, proj_point_t P, const proj_point_t K, const uint64_t k)
 {
     assert (k >= 3);
     assert (k % 2 == 1);
@@ -666,7 +665,6 @@ void xISOG(proj_point_t A, proj_point_t P, const proj_point_t K, uint64_t k)
     xDBL(M[1], A, K);
 
     for (i = 1; i < k / 2; ++i) {
-
         if (i >= 2)
             xADD(M[i % 3], M[(i - 1) % 3], K, M[(i - 2) % 3]);
 

@@ -3,8 +3,8 @@
 *                   Constant-time Implementation of CSIDH
 *
 *   Author: Amir Jalali                     ajalali2016@fau.edu
-*   All rights reserved
-*   
+*                       
+*                       All rights reserved   
 *****************************************************************************/
 .data
 p511:
@@ -160,13 +160,13 @@ fp_add_512:
     ldr     x18, p511 + 56
 
     subs    x3, x3, x11
-    sbcs   x4, x4, x12
-    sbcs   x5, x5, x13
-    sbcs   x6, x6, x14
-    sbcs   x7, x7, x15
-    sbcs   x8, x8, x16
-    sbcs   x9, x9, x17
-    sbcs   x10, x10, x18
+    sbcs    x4, x4, x12
+    sbcs    x5, x5, x13
+    sbcs    x6, x6, x14
+    sbcs    x7, x7, x15
+    sbcs    x8, x8, x16
+    sbcs    x9, x9, x17
+    sbcs    x10, x10, x18
     sbc     x19, xzr, xzr
 
     and     x11, x11, x19
@@ -281,7 +281,6 @@ mp_add_512:
     stack_pointer_ld
     ret
 
-// TODO: Check if negative results need to be implemented in constant-time
 mp_sub_512:
     stack_pointer_st
 

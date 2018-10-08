@@ -1,3 +1,11 @@
+/****************************************************************************
+*   Efficient implementation of finite field arithmetic over p511 on ARMv8
+*                   Constant-time Implementation of CSIDH
+*
+*   Author: Amir Jalali                     ajalali2016@fau.edu
+*                       
+*                       All rights reserved   
+*****************************************************************************/
 #include "arith.h"
 #include "csidh_api.h"
 #include <stdio.h>
@@ -43,8 +51,10 @@ int csidh_test()
     {
         csidh_keypair(alice_priv, alice_pub);
         csidh_keypair(bob_priv, bob_pub);
-        valid = csidh_sharedsecret(bob_pub, alice_priv, alice_shared);
-        valid = csidh_sharedsecret(alice_pub, bob_priv, bob_shared);
+        valid = csidh_validate(bob_pub);
+        valid = csidh_validate(alice_pub);
+        csidh_sharedsecret(bob_pub, alice_priv, alice_shared);
+        csidh_sharedsecret(alice_pub, bob_priv, bob_shared);
                 
         if(memcmp(alice_shared, bob_shared, NWORDS_64 * 8) != 0)
         {
@@ -87,7 +97,7 @@ void csidh_bench()
     public_key_t alice_pub, bob_pub;
     private_key_t alice_priv, bob_priv;
     shared_secret_t alice_shared, bob_shared;
-    unsigned long long cycles, start, end;
+    unsigned long long cycles, start, end, alice_total = 0, bob_total = 0;
 
     fp_init_zero(alice_pub->A);
     fp_init_zero(bob_pub->A);
@@ -98,9 +108,14 @@ void csidh_bench()
         alice_priv->exponents[i] = 0;
         bob_priv->exponents[i] = 0;
     }
-    
-    printf("\n\nBENCHMARKING CSIDH KEY-EXCHANGE CSIDH_P511\n");
-    printf("------------------------------------------\n\n");
+
+#ifdef CONSTANT
+    printf("\n\nBENCHMARKING CONSTANT-TIME CSIDH KEY-EXCHANGE CSIDH_P511\n");
+    printf("----------------------------------------------------------\n\n");
+#else
+    printf("\n\nBENCHMARKING NON-CONSTANT TIME CSIDH KEY-EXCHANGE CSIDH_P511\n");
+    printf("------------------------------------------------------------\n\n");
+#endif    
 
     // Benchmarking key generation
     cycles = 0;
@@ -111,10 +126,54 @@ void csidh_bench()
         end = cpucycles();
         cycles = cycles + (end - start);
     }
-    printf("Key generation runs in................................%10lld\n", cycles/BENCH_COUNT);
+    printf("Alice Key generation runs in..............................%10lld nsec\n", cycles/BENCH_COUNT);
+    alice_total = cycles/BENCH_COUNT;
 
-    // Benchmarking shared key generation
-    csidh_keypair(bob_priv, bob_pub);
+    cycles = 0;
+    for(i = 0; i < BENCH_COUNT; i++)
+    {
+        start = cpucycles();
+        csidh_keypair(bob_priv, bob_pub);
+        end = cpucycles();
+        cycles = cycles + (end - start);
+    }
+    printf("Bob Key generation runs in................................%10lld nsec\n", cycles/BENCH_COUNT);
+    bob_total = cycles/BENCH_COUNT;
+
+    // Benchmarking Public-key validation
+    cycles = 0;
+    for(i = 0; i < BENCH_COUNT; i++)
+    {
+        start = cpucycles();
+        csidh_validate(bob_pub);
+        end = cpucycles();
+        cycles = cycles + (end - start);
+    }
+    printf("Alice validation of Bob's Public-Key runs in..............%10lld nsec\n", cycles/BENCH_COUNT);
+    alice_total += cycles/BENCH_COUNT;
+
+    cycles = 0;
+    for(i = 0; i < BENCH_COUNT; i++)
+    {
+        start = cpucycles();
+        csidh_validate(alice_pub);
+        end = cpucycles();
+        cycles = cycles + (end - start);
+    }
+    printf("Bob validation of Alice's Public-Key runs in..............%10lld nsec\n", cycles/BENCH_COUNT);
+    bob_total += cycles/BENCH_COUNT;
+
+    // Benchmarking shared-secret computations
+    cycles = 0;
+    for(i = 0; i < BENCH_COUNT; i++)
+    {
+        start = cpucycles();
+        csidh_sharedsecret(bob_pub, alice_priv, alice_shared);
+        end = cpucycles();
+        cycles = cycles + (end - start);
+    }
+    printf("Alice Shared key generation runs in.......................%10lld nsec\n", cycles/BENCH_COUNT);
+    alice_total += cycles/BENCH_COUNT;
 
     cycles = 0;
     for(i = 0; i < BENCH_COUNT; i++)
@@ -124,8 +183,11 @@ void csidh_bench()
         end = cpucycles();
         cycles = cycles + (end - start);
     }
-    printf("Shared key generation runs in.........................%10lld\n", cycles/BENCH_COUNT);
+    printf("Bob Shared key generation runs in.........................%10lld nsec\n", cycles/BENCH_COUNT);
+    bob_total += cycles/BENCH_COUNT;
 
+    printf("\nAlice Total computations runs in.........................%10lld nsec\n", alice_total);
+    printf("Bob Total computations runs in...........................%10lld nsec\n", bob_total);
     return;
 }
 

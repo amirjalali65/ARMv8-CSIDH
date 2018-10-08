@@ -1,8 +1,11 @@
-/*****************************************************************************
- *      Constant-time Arithmetic Library for CSIDH 
- * 
- *      Author: Amir Jalali             ajalali2016@fau.edu
- * ***************************************************************************/
+/****************************************************************************
+*   Efficient implementation of finite field arithmetic over p511 on ARMv8
+*                   Constant-time Implementation of CSIDH
+*
+*   Author: Amir Jalali                     ajalali2016@fau.edu
+*                       
+*                       All rights reserved   
+*****************************************************************************/
 #ifndef ARITH_H
 #define ARITH_H
 
@@ -57,7 +60,7 @@ void mp_U512_set_zero(uint64_t *a);
 
 void mp_U512_set_one(uint64_t *a);
 
-bool mp_U512_bit(const uint64_t *a, uint64_t k);
+int mp_U512_bit(const uint64_t *a, uint64_t k);
 
 ///////////////////  Field Arithmetic  /////////////////////
 
@@ -89,6 +92,7 @@ void fp_print(uint64_t *a);
 
 
 ///////////////////  Group Arithmetic  //////////////////////
+void swap_points(proj_point_t P, proj_point_t Q, const uint64_t mask);
 
 void xDBL(proj_point_t Q, const proj_point_t A, const proj_point_t P);
 
@@ -96,7 +100,7 @@ void xADD(proj_point_t S, const proj_point_t P, const proj_point_t Q, const proj
 
 void xDBLADD(proj_point_t R, proj_point_t S, const proj_point_t P, const proj_point_t Q, const proj_point_t PQ, const proj_point_t A);
 
-void xMUL(proj_point_t Q, const proj_point_t A, const proj_point_t P, const UINT512_t k);
+void xMUL(proj_point_t Q, const proj_point_t A, proj_point_t P, const UINT512_t k);
 
 void xISOG(proj_point_t A, proj_point_t P, const proj_point_t K, uint64_t k);
 

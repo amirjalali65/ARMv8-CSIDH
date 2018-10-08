@@ -1,3 +1,11 @@
+/****************************************************************************
+*   Efficient implementation of finite field arithmetic over p511 on ARMv8
+*                   Constant-time Implementation of CSIDH
+*
+*   Author: Modified by Amir Jalali                     ajalali2016@fau.edu
+*                       
+*                       All rights reserved   
+*****************************************************************************/
 #include <string.h>
 #include <assert.h>
 #include "csidh_api.h"
@@ -5,22 +13,41 @@
 
 void csidh_keypair(private_key_t priv, public_key_t pub)
 {
-    int i;
+    int i, j;
     public_key_t base_curve;
     fp_init_zero(base_curve->A);
     memset(&priv->exponents, 0, sizeof(priv->exponents)); 
-    // TODO: Private-key generation should be constant time?! 
-    for (i = 0; i < SMALL_PRIMES_COUNT; ) {
+
+    for (i = 0; i < SMALL_PRIMES_COUNT; i++) 
+    {
         int8_t buf[64];
         randombytes(buf, sizeof(buf));
-        for (size_t j = 0; j < sizeof(buf); ++j) {
+        for (j = 0; j < sizeof(buf); ++j) 
+        {
+#ifdef CONSTANT
+            uint8_t compare_mask, full_mask;
+            int8_t compare_lower, compare_upper, new_val, tmp;
+
+            compare_upper = (MAX_EXPONENT + 1) - buf[j];
+            compare_mask = !((compare_upper & 0x80) >> 7 | !compare_upper);
+            compare_lower = buf[j] - (-MAX_EXPONENT - 1);
+            compare_mask &= !((compare_lower & 0x80) >> 7 | !compare_lower);
+            full_mask = 0 - compare_mask;
+
+            new_val = priv->exponents[i/2] | (buf[j] & 0xf) << i % 2 * 4;     
+            tmp = full_mask & (new_val ^ priv->exponents[i/2]);
+            priv->exponents[i/2] = tmp ^ priv->exponents[i/2];
+#else
             if (buf[j] <= MAX_EXPONENT && buf[j] >= -MAX_EXPONENT) {
                 priv->exponents[i / 2] |= (buf[j] & 0xf) << i % 2 * 4;
                 if (++i >= SMALL_PRIMES_COUNT)
                     break;
             }
+#endif
         }
     }
+
+    // Generate Public-key
     action(base_curve, priv, pub);
 }
 
@@ -29,10 +56,12 @@ void csidh_keypair(private_key_t priv, public_key_t pub)
  * but uses more memory. */
 static void cofactor_multiples(proj_point_t *P, const proj_point_t A, size_t lower, size_t upper)
 {
-    assert(lower < upper);
+    // Since this function is only called by csidh_validate, it does not need to 
+    // be constant-time from the security point of view 
+    assert(lower < upper);  
 
     if (upper - lower == 1)
-        return;
+        return; 
 
     size_t mid = lower + (upper - lower + 1) / 2;
 
@@ -51,15 +80,18 @@ static void cofactor_multiples(proj_point_t *P, const proj_point_t A, size_t low
     cofactor_multiples(P, A, mid, upper);
 }
 
-/* never accepts invalid keys. */
-bool validate(const public_key_t in)
+bool csidh_validate(const public_key_t in)
 {
-    proj_point_t A;
+    // Since validation does not any secret information, the non-constant time
+    // implementation does not seem to expose any vulnerability to the scheme
+
+    proj_point_t A, P[SMALL_PRIMES_COUNT];
     fp_cpy(in->A, A->X);
     fp_cpy(one_Mont, A->Z);
 
+    UINT512_t order, t;
     do {
-        proj_point_t P[SMALL_PRIMES_COUNT];
+      
         fp_random_512(P[0]->X);
         fp_cpy(one_Mont, P[0]->Z);
         
@@ -69,7 +101,7 @@ bool validate(const public_key_t in)
 
         cofactor_multiples(P, A, 0, SMALL_PRIMES_COUNT);
 
-        UINT512_t order;
+    
         mp_U512_set_one(order);
 
         for (size_t i = SMALL_PRIMES_COUNT - 1; i < SMALL_PRIMES_COUNT; --i) {
@@ -77,7 +109,6 @@ bool validate(const public_key_t in)
             /* we only gain information if [(p+1)/l] P is non-zero */
             if (memcmp(P[i]->Z, zero, sizeof(felm_t))) {
 
-                UINT512_t t;
                 mp_U512_set_zero(t);
                 t[0] = smallprimes[i];
                 xMUL(P[i], A, P[i], t);
@@ -98,7 +129,6 @@ bool validate(const public_key_t in)
     } while (1);
 }
 
-/* compute x^3 + Ax^2 + x */
 static void get_mont_rhs(const felm_t A, const felm_t x, felm_t rhs)
 {
     felm_t t;
@@ -110,7 +140,7 @@ static void get_mont_rhs(const felm_t A, const felm_t x, felm_t rhs)
     fp_mul_mont_512(rhs, x, rhs);
 }
 
-/* totally not constant-time. */
+// non-constant and constant-time implementation of action
 void action(const public_key_t in, const private_key_t priv, public_key_t out)
 {
     UINT512_t k[2];
@@ -121,9 +151,25 @@ void action(const public_key_t in, const private_key_t priv, public_key_t out)
 
     uint8_t e[2][SMALL_PRIMES_COUNT];
     int8_t t = 0;
+    
+#ifdef CONSTANT 
+    uint8_t t_sign;
+    bool is_nonzero;
 
-    for (size_t i = 0; i < SMALL_PRIMES_COUNT; ++i) {
+    for (size_t i = 0; i < SMALL_PRIMES_COUNT; ++i) 
+    {
+        t = (int8_t) (priv->exponents[i / 2] << i % 2 * 4) >> 4;
+        t_sign = ((t & 0x80) >> 7 | !t);
+        is_nonzero = (bool)t;
 
+        e[t_sign][i] = t - (2 * t_sign)*t;
+        e[!t_sign][i] = 0;
+        mp_mul_u64(k[!t_sign], smallprimes[i], k[!t_sign]);
+        mp_mul_u64(k[!is_nonzero], (smallprimes[i] - ((is_nonzero)*(smallprimes[i]-1))), k[!is_nonzero]);
+    }
+#else
+    for (size_t i = 0; i < SMALL_PRIMES_COUNT; ++i) 
+    {
         t = (int8_t) (priv->exponents[i / 2] << i % 2 * 4) >> 4;
 
         if (t > 0) {
@@ -143,84 +189,133 @@ void action(const public_key_t in, const private_key_t priv, public_key_t out)
             mp_mul_u64(k[1], smallprimes[i], k[1]);
         }
     }
-    proj_point_t A;
+#endif
+    proj_point_t A, P; UINT512_t one, cof; felm_t rhs;
     fp_cpy(in->A, A->X);
     fp_cpy(one_Mont, A->Z);
-    
-    UINT512_t one;
+
     mp_U512_set_one(one);
-    
-    // Definition of variable should be outside of the loop
-    proj_point_t P;
-    felm_t rhs;
-    UINT512_t cof;
 
-    bool done[2] = {false, false};
+    bool  done[2] = {false, false};
+#ifdef CONSTANT
+    int count;
+    bool donemask, sign, mask, esign_mask;
+    proj_point_t bigA, AA, PP, K, Acpy, Pcpy;
+    unsigned int z_is_zero;
+    uint64_t correction;
 
-    do {
-
-        assert(!memcmp(A->Z, one_Mont, sizeof(felm_t)));
-        
+    for(count = 0; count < 35; count++) 
+    {
+        fp_cpy(A->X, bigA->X);
         fp_random_512(P->X);
         fp_cpy(one_Mont, P->Z);
         
         get_mont_rhs(A->X, P->X, rhs);
-        bool sign = !fp_issquare(rhs);
-
-        if (done[sign])
-            continue;
+        sign = !fp_issquare(rhs);
 
         xMUL(P, A, P, k[sign]);
 
         done[sign] = true;
 
-        for (size_t i = 0; i < SMALL_PRIMES_COUNT; ++i) {
+        for (size_t i = 0; i < SMALL_PRIMES_COUNT; ++i) 
+        {
+            fp_cpy(A->X, AA->X);
+            fp_cpy(A->Z, AA->Z);
+            fp_cpy(P->X, PP->X);
+            fp_cpy(P->Z, PP->Z);
 
-            if (e[sign][i]) {
-
-                
-                mp_U512_set_one(cof);
-                for (size_t j = i + 1; j < SMALL_PRIMES_COUNT; ++j)
-                    if (e[sign][j])
-                        mp_mul_u64(cof, smallprimes[j], cof);
-                proj_point_t K;
-                xMUL(K, A, P, cof);
-
-                if (memcmp(K->Z, zero, sizeof(felm_t))) {
-
-                    xISOG(A, P, K, smallprimes[i]);
-
-                    if (!--e[sign][i])
-                        mp_mul_u64(k[sign], smallprimes[i], k[sign]);
-
-                }
-
+            esign_mask = e[sign][i];
+            mp_U512_set_one(cof);
+            for (size_t j = i + 1; j < SMALL_PRIMES_COUNT; ++j)
+            {
+                mask = !e[sign][j];
+                correction = mask * (smallprimes[j] - 1);
+                mp_mul_u64(cof, (smallprimes[j] - correction), cof);
             }
+            xMUL(K, A, P, cof);
+            fp_cpy(A->X, Acpy->X);
+            fp_cpy(A->Z, Acpy->Z);
+            fp_cpy(P->X, Pcpy->X);
+            fp_cpy(P->Z, Pcpy->Z);
 
+            z_is_zero = !memcmp(K->Z, zero, sizeof(felm_t));
+
+            xISOG(A, P, K, smallprimes[i]);
+            swap_points(A, Acpy, (0 - (uint64_t)z_is_zero));
+            swap_points(P, Pcpy, (0 - (uint64_t)z_is_zero));
+            swap_points(A, AA, (0 - (uint64_t)!esign_mask));
+            swap_points(P, PP, (0 - (uint64_t)!esign_mask));
+
+            mask = (--e[sign][i] | (bool)z_is_zero);
+            mask = (mask | !esign_mask);
+            e[sign][i] += z_is_zero;
+            correction = mask * (smallprimes[i] - 1);
+                
+            mp_mul_u64(k[sign], (smallprimes[i] - correction), k[sign]);
             done[sign] &= !e[sign][i];
         }
 
         fp_inv(A->Z);
         fp_mul_mont_512(A->X, A->Z, A->X);
-        fp_cpy(one_Mont, A->Z);
+        fp_cpy(one_Mont, A->Z);     
+        donemask ^= donemask;   
+        swap_points(A, bigA, (0 - (uint64_t)donemask));
+        donemask = (done[0] & done[1]);
+    } 
+#else
+        do
+        {
+            fp_random_512(P->X);
+            fp_cpy(one_Mont, P->Z);
+            
+            get_mont_rhs(A->X, P->X, rhs);
+            bool sign = !fp_issquare(rhs);
+            
+            if (done[sign])
+                continue;
+            
+            xMUL(P, A, P, k[sign]);
 
-    } while (!(done[0] && done[1]));
+            done[sign] = true;
+            for (size_t i = 0; i < SMALL_PRIMES_COUNT; ++i) 
+            {
+                if (e[sign][i]) 
+                {
 
+                    
+                    mp_U512_set_one(cof);
+                    for (size_t j = i + 1; j < SMALL_PRIMES_COUNT; ++j)
+                        if (e[sign][j])
+                            mp_mul_u64(cof, smallprimes[j], cof);
+                    proj_point_t K;
+                    xMUL(K, A, P, cof);
+
+                    if (memcmp(K->Z, zero, sizeof(felm_t))) {
+
+                        xISOG(A, P, K, smallprimes[i]);
+
+                        if (!--e[sign][i])
+                            mp_mul_u64(k[sign], smallprimes[i], k[sign]);
+
+                    }
+
+                }
+                done[sign] &= !e[sign][i];
+            }
+            fp_inv(A->Z);
+            fp_mul_mont_512(A->X, A->Z, A->X);
+            fp_cpy(one_Mont, A->Z);     
+        }
+        while(!(done[0] && done[1]));
+#endif
     fp_cpy(A->X, out->A);
 }
 
-/* includes public-key validation. */
-bool csidh_sharedsecret(const public_key_t in, const private_key_t priv, shared_secret_t out)
+void csidh_sharedsecret(const public_key_t in, const private_key_t priv, shared_secret_t out)
 {
     public_key_t tmp;
-    bool valid = true;
-    fp_init_zero(tmp->A);
-    if (!validate(in)) {
-        fp_random_512(out->A);
-        valid = false;
-    }
+
     action(in, priv, tmp);
     fp_cpy(tmp->A, out->A);
-    return valid;
 }
 
