@@ -587,7 +587,7 @@ void xMUL(proj_point_t Q, const proj_point_t A,  proj_point_t P, const UINT512_t
 
     uint64_t bit, nbits = 512;
 
-#ifdef CONSTANT
+#ifdef _CONSTANT_
     int i;
     while(--nbits && !mp_U512_bit(k, nbits))
     {
@@ -633,7 +633,27 @@ void xMUL(proj_point_t Q, const proj_point_t A,  proj_point_t P, const UINT512_t
     } while (nbits--);
 #endif
 }
+/*
+void xMUL_Constant(proj_point_t Q, const proj_point_t A,  proj_point_t P, const UINT512_t k)
+{
+    proj_point_t R, tmp, Pcopy;
+    fp_cpy(P->X, R->X);
+    fp_cpy(P->Z, R->Z);
+    fp_cpy(P->X, tmp->X);
+    fp_cpy(P->Z, tmp->Z);
 
+
+    fp_cpy(P->X, Pcopy->X);
+    fp_cpy(P->Z, Pcopy->Z);
+
+    fp_cpy(one_Mont, Q->X);
+    fp_cpy(zero, Q->Z);
+
+    uint64_t bit, nbits = 512;
+
+
+}
+*/
 void xISOG(proj_point_t A, proj_point_t P, const proj_point_t K, const uint64_t k)
 {
     assert (k >= 3);

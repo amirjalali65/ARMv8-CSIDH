@@ -1,11 +1,3 @@
-/****************************************************************************
-*   Efficient implementation of finite field arithmetic over p511 on ARMv8
-*                   Constant-time Implementation of CSIDH
-*
-*   Author: Amir Jalali                     ajalali2016@fau.edu
-*                       
-*                       All rights reserved   
-*****************************************************************************/
 #include "arith.h"
 #include "csidh_api.h"
 #include <stdio.h>
@@ -27,26 +19,31 @@ int64_t cpucycles(void)
 int csidh_test()
 {
     int i;
-    public_key_t alice_pub, bob_pub;
-    private_key_t alice_priv, bob_priv;
-    shared_secret_t alice_shared, bob_shared;
+    public_key *alice_pub, *bob_pub;
+    private_key *alice_priv, *bob_priv;
+    shared_secret *alice_shared, *bob_shared;
+
+    alice_pub = (public_key*)calloc(1, sizeof(public_key));
+    bob_pub = (public_key*)calloc(1, sizeof(public_key));
+    alice_priv = (private_key*)calloc(1, sizeof(private_key));
+    bob_priv = (private_key*)calloc(1, sizeof(private_key));
+    alice_shared = (shared_secret*)calloc(1, sizeof(shared_secret));
+    bob_shared = (shared_secret*)calloc(1, sizeof(shared_secret));
 
     fp_init_zero(alice_pub->A);
     fp_init_zero(bob_pub->A);
     fp_init_zero(bob_shared->A);
     fp_init_zero(alice_shared->A);
-    for(i = 0; i < (SMALL_PRIMES_COUNT + 1) / 2; i++)
-    {
-        alice_priv->exponents[i] = 0;
-        bob_priv->exponents[i] = 0;
-    }
     
     bool passed = true;
     bool valid = true;
-
-    printf("\n\nTESTING CSIDH KEY-EXCHANGE CSIDH_P511\n");
-    printf("------------------------------------------\n\n");
-
+#ifdef _CONSTANT_
+    printf("\n\nTESTING CONSTANT-TIME CSIDH KEY-EXCHANGE CSIDH_P511\n");
+    printf("---------------------------------------------------\n\n");
+#else
+    printf("\n\nTESTING NON-CONSTANT TIME CSIDH KEY-EXCHANGE CSIDH_P511\n");
+    printf("-------------------------------------------------------\n\n");
+#endif
     for(i = 0; i < TEST_COUNT; i++)
     {
         csidh_keypair(alice_priv, alice_pub);
@@ -94,9 +91,16 @@ int csidh_test()
 void csidh_bench()
 {
     int i;
-    public_key_t alice_pub, bob_pub;
-    private_key_t alice_priv, bob_priv;
-    shared_secret_t alice_shared, bob_shared;
+    public_key *alice_pub, *bob_pub;
+    private_key *alice_priv, *bob_priv;
+    shared_secret *alice_shared, *bob_shared;
+
+    alice_pub = (public_key*)calloc(1, sizeof(public_key));
+    bob_pub = (public_key*)calloc(1, sizeof(public_key));
+    alice_priv = (private_key*)calloc(1, sizeof(private_key));
+    bob_priv = (private_key*)calloc(1, sizeof(private_key));
+    alice_shared = (shared_secret*)calloc(1, sizeof(shared_secret));
+    bob_shared = (shared_secret*)calloc(1, sizeof(shared_secret));
     unsigned long long cycles, start, end, alice_total = 0, bob_total = 0;
 
     fp_init_zero(alice_pub->A);
@@ -109,7 +113,7 @@ void csidh_bench()
         bob_priv->exponents[i] = 0;
     }
 
-#ifdef CONSTANT
+#ifdef _CONSTANT_
     printf("\n\nBENCHMARKING CONSTANT-TIME CSIDH KEY-EXCHANGE CSIDH_P511\n");
     printf("----------------------------------------------------------\n\n");
 #else

@@ -1,2 +1,3 @@
 # ARMv8-CSIDH
-Efficient implementation of Post-Quantum Commutative Group Action on ARMv8 Processors
+Optimized and Constant-time implementation of Post-Quantum Commutative Group Action (CSIDH) on ARMv8 Processors
+

@@ -1,8 +1,8 @@
 /****************************************************************************
 *   Efficient implementation of finite field arithmetic over p511 on ARMv8
 *                   Constant-time Implementation of CSIDH
-*
-*   Author: Modified by Amir Jalali                     ajalali2016@fau.edu
+*   The changes made to the original POC code of CSIDH by Castryck et al.
+*   Author: Created by Amir Jalali                     ajalali2016@fau.edu
 *                       
 *                       All rights reserved   
 *****************************************************************************/
@@ -15,6 +15,7 @@ void csidh_keypair(private_key_t priv, public_key_t pub)
 {
     int i, j;
     public_key_t base_curve;
+
     fp_init_zero(base_curve->A);
     memset(&priv->exponents, 0, sizeof(priv->exponents)); 
 
@@ -24,7 +25,7 @@ void csidh_keypair(private_key_t priv, public_key_t pub)
         randombytes(buf, sizeof(buf));
         for (j = 0; j < sizeof(buf); ++j) 
         {
-#ifdef CONSTANT
+#ifdef _CONSTANT_
             uint8_t compare_mask, full_mask;
             int8_t compare_lower, compare_upper, new_val, tmp;
 
@@ -143,16 +144,14 @@ static void get_mont_rhs(const felm_t A, const felm_t x, felm_t rhs)
 // non-constant and constant-time implementation of action
 void action(const public_key_t in, const private_key_t priv, public_key_t out)
 {
-    UINT512_t k[2];
-    mp_U512_set_zero(k[0]);
-    mp_U512_set_zero(k[1]);
+    UINT512_t k[2] = {{0}};
     k[0][0] = 4; 
     k[1][0] = 4;
 
     uint8_t e[2][SMALL_PRIMES_COUNT];
     int8_t t = 0;
     
-#ifdef CONSTANT 
+#ifdef _CONSTANT_ 
     uint8_t t_sign;
     bool is_nonzero;
 
@@ -162,7 +161,7 @@ void action(const public_key_t in, const private_key_t priv, public_key_t out)
         t_sign = ((t & 0x80) >> 7 | !t);
         is_nonzero = (bool)t;
 
-        e[t_sign][i] = t - (2 * t_sign)*t;
+        e[t_sign][i] = t - (2 * t_sign) * t;
         e[!t_sign][i] = 0;
         mp_mul_u64(k[!t_sign], smallprimes[i], k[!t_sign]);
         mp_mul_u64(k[!is_nonzero], (smallprimes[i] - ((is_nonzero)*(smallprimes[i]-1))), k[!is_nonzero]);
@@ -197,7 +196,7 @@ void action(const public_key_t in, const private_key_t priv, public_key_t out)
     mp_U512_set_one(one);
 
     bool  done[2] = {false, false};
-#ifdef CONSTANT
+#ifdef _CONSTANT_
     int count;
     bool donemask, sign, mask, esign_mask;
     proj_point_t bigA, AA, PP, K, Acpy, Pcpy;
