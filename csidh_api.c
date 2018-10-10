@@ -11,46 +11,6 @@
 #include "csidh_api.h"
 #include "rng.h"
 
-void csidh_keypair(private_key_t priv, public_key_t pub)
-{
-    int i, j;
-    public_key_t base_curve;
-
-    fp_init_zero(base_curve->A);
-    memset(&priv->exponents, 0, sizeof(priv->exponents)); 
-
-    for (i = 0; i < SMALL_PRIMES_COUNT; i++) 
-    {
-        int8_t buf[64];
-        randombytes(buf, sizeof(buf));
-        for (j = 0; j < sizeof(buf); ++j) 
-        {
-#ifdef _CONSTANT_
-            uint8_t compare_mask, full_mask;
-            int8_t compare_lower, compare_upper, new_val, tmp;
-
-            compare_upper = (MAX_EXPONENT + 1) - buf[j];
-            compare_mask = !((compare_upper & 0x80) >> 7 | !compare_upper);
-            compare_lower = buf[j] - (-MAX_EXPONENT - 1);
-            compare_mask &= !((compare_lower & 0x80) >> 7 | !compare_lower);
-            full_mask = 0 - compare_mask;
-
-            new_val = priv->exponents[i/2] | (buf[j] & 0xf) << i % 2 * 4;     
-            tmp = full_mask & (new_val ^ priv->exponents[i/2]);
-            priv->exponents[i/2] = tmp ^ priv->exponents[i/2];
-#else
-            if (buf[j] <= MAX_EXPONENT && buf[j] >= -MAX_EXPONENT) {
-                priv->exponents[i / 2] |= (buf[j] & 0xf) << i % 2 * 4;
-                if (++i >= SMALL_PRIMES_COUNT)
-                    break;
-            }
-#endif
-        }
-    }
-
-    // Generate Public-key
-    action(base_curve, priv, pub);
-}
 
 /* compute [(p+1)/l] P for all l in our list of primes. */
 /* divide and conquer is much faster than doing it naively,
@@ -142,7 +102,7 @@ static void get_mont_rhs(const felm_t A, const felm_t x, felm_t rhs)
 }
 
 // non-constant and constant-time implementation of action
-void action(const public_key_t in, const private_key_t priv, public_key_t out)
+static void action(const public_key_t in, const private_key_t priv, public_key_t out)
 {
     UINT512_t k[2] = {{0}};
     k[0][0] = 4; 
@@ -308,6 +268,55 @@ void action(const public_key_t in, const private_key_t priv, public_key_t out)
         while(!(done[0] && done[1]));
 #endif
     fp_cpy(A->X, out->A);
+}
+
+void csidh_keypair(private_key_t priv, public_key_t pub)
+{
+    int i, j;
+    public_key_t base_curve;
+
+    fp_init_zero(base_curve->A);
+    memset(&priv->exponents, 0, sizeof(priv->exponents)); 
+
+#ifdef _CONSTANT_
+    for (i = 0; i < SMALL_PRIMES_COUNT; i++) 
+    {
+        int8_t buf[64];
+        randombytes(buf, sizeof(buf));
+        for (j = 0; j < sizeof(buf); ++j) 
+        {
+            uint8_t compare_mask, full_mask;
+            int8_t compare_lower, compare_upper, new_val, tmp;
+
+            compare_upper = (MAX_EXPONENT + 1) - buf[j];
+            compare_mask = !((compare_upper & 0x80) >> 7 | !compare_upper);
+            compare_lower = buf[j] - (-MAX_EXPONENT - 1);
+            compare_mask &= !((compare_lower & 0x80) >> 7 | !compare_lower);
+            full_mask = 0 - compare_mask;
+
+            new_val = priv->exponents[i/2] | (buf[j] & 0xf) << i % 2 * 4;     
+            tmp = full_mask & (new_val ^ priv->exponents[i/2]);
+            priv->exponents[i/2] = tmp ^ priv->exponents[i/2];
+        }
+    }
+#else
+    for (i = 0; i < SMALL_PRIMES_COUNT;) 
+    {
+        int8_t buf[64];
+        randombytes(buf, sizeof(buf));
+        for (j = 0; j < sizeof(buf); ++j) 
+        {
+            if (buf[j] <= MAX_EXPONENT && buf[j] >= -MAX_EXPONENT) {
+                priv->exponents[i / 2] |= (buf[j] & 0xf) << i % 2 * 4;
+                if (++i >= SMALL_PRIMES_COUNT)
+                    break;
+            }
+        }
+    }
+#endif
+
+    // Generate Public-key
+    action(base_curve, priv, pub);
 }
 
 void csidh_sharedsecret(const public_key_t in, const private_key_t priv, shared_secret_t out)

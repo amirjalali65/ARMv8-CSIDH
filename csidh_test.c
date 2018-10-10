@@ -19,16 +19,9 @@ int64_t cpucycles(void)
 int csidh_test()
 {
     int i;
-    public_key *alice_pub, *bob_pub;
-    private_key *alice_priv, *bob_priv;
-    shared_secret *alice_shared, *bob_shared;
-
-    alice_pub = (public_key*)calloc(1, sizeof(public_key));
-    bob_pub = (public_key*)calloc(1, sizeof(public_key));
-    alice_priv = (private_key*)calloc(1, sizeof(private_key));
-    bob_priv = (private_key*)calloc(1, sizeof(private_key));
-    alice_shared = (shared_secret*)calloc(1, sizeof(shared_secret));
-    bob_shared = (shared_secret*)calloc(1, sizeof(shared_secret));
+    public_key_t alice_pub, bob_pub;
+    private_key_t alice_priv, bob_priv;
+    shared_secret_t alice_shared, bob_shared;
 
     fp_init_zero(alice_pub->A);
     fp_init_zero(bob_pub->A);
@@ -91,16 +84,9 @@ int csidh_test()
 void csidh_bench()
 {
     int i;
-    public_key *alice_pub, *bob_pub;
-    private_key *alice_priv, *bob_priv;
-    shared_secret *alice_shared, *bob_shared;
-
-    alice_pub = (public_key*)calloc(1, sizeof(public_key));
-    bob_pub = (public_key*)calloc(1, sizeof(public_key));
-    alice_priv = (private_key*)calloc(1, sizeof(private_key));
-    bob_priv = (private_key*)calloc(1, sizeof(private_key));
-    alice_shared = (shared_secret*)calloc(1, sizeof(shared_secret));
-    bob_shared = (shared_secret*)calloc(1, sizeof(shared_secret));
+    public_key_t alice_pub, bob_pub;
+    private_key_t alice_priv, bob_priv;
+    shared_secret_t alice_shared, bob_shared;
     unsigned long long cycles, start, end, alice_total = 0, bob_total = 0;
 
     fp_init_zero(alice_pub->A);
@@ -191,7 +177,7 @@ void csidh_bench()
     bob_total += cycles/BENCH_COUNT;
 
     printf("\nAlice Total computations runs in.........................%10lld nsec\n", alice_total);
-    printf("Bob Total computations runs in...........................%10lld nsec\n", bob_total);
+    printf("Bob Total computations runs in...........................%10lld nsec\n\n", bob_total);
     return;
 }
 
