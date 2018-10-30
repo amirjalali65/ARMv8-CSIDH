@@ -15,9 +15,11 @@
 //////////////////  Parameters ///////////////////////////
 
 #define SMALL_PRIMES_COUNT  74
-#define NWORDS_64   8
-#define MAX_EXPONENT    5
+#define NWORDS_64           8
+#define MAX_EXPONENT        5
+#define UPPER_BOUND         52
 
+uint64_t prime511[NWORDS_64];
 uint64_t one_Mont[NWORDS_64];
 const uint64_t smallprimes[SMALL_PRIMES_COUNT];
 const uint64_t four_sqrt_p[8];
@@ -92,7 +94,7 @@ void fp_print(uint64_t *a);
 
 
 ///////////////////  Group Arithmetic  //////////////////////
-void swap_points(proj_point_t P, proj_point_t Q, const uint64_t mask);
+void cswap(proj_point_t P, proj_point_t Q, const uint64_t mask);
 
 void xDBL(proj_point_t Q, const proj_point_t A, const proj_point_t P);
 
@@ -101,6 +103,8 @@ void xADD(proj_point_t S, const proj_point_t P, const proj_point_t Q, const proj
 void xDBLADD(proj_point_t R, proj_point_t S, const proj_point_t P, const proj_point_t Q, const proj_point_t PQ, const proj_point_t A);
 
 void xMUL(proj_point_t Q, const proj_point_t A, proj_point_t P, const UINT512_t k);
+
+void xMUL_non_const(proj_point_t Q, const proj_point_t A,  proj_point_t P, const UINT512_t k);
 
 void xISOG(proj_point_t A, proj_point_t P, const proj_point_t K, uint64_t k);
 

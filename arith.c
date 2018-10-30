@@ -541,7 +541,7 @@ void xADD(proj_point_t S, const proj_point_t P, const proj_point_t Q, const proj
 }
 
 
-void swap_points(proj_point_t P, proj_point_t Q, const uint64_t mask)
+void cswap(proj_point_t P, proj_point_t Q, const uint64_t mask)
 {
   // Constant-time point swap   
   // mask = 0 then P <- P and Q <- Q
@@ -580,12 +580,18 @@ void xMUL(proj_point_t Q, const proj_point_t A,  proj_point_t P, const UINT512_t
     fp_cpy(zero, Q->Z);
 
     fp_add_512(A->Z, A->Z, A24->X);
-    fp_add_512(A24->X, A24->X, A24->Z);
-    fp_add_512(A24->X, A->X, A24->X);
+    fp_add_512(A24->X, A24->X, A24->Z); // 4C
+    fp_add_512(A24->X, A->X, A24->X);   // A + 2C
 
-    int bit, nbits = 512;
+    int bit, nbits = 511;
 
 #ifdef _CONSTANT_
+
+    #ifdef _FASTLADDER_
+        while(--nbits && !mp_U512_bit(k, nbits));
+        xDBL(Q, A, P);
+    #endif
+
     int i, swap, bprev = 0;
     uint64_t mask;
 
@@ -595,11 +601,12 @@ void xMUL(proj_point_t Q, const proj_point_t A,  proj_point_t P, const UINT512_t
         swap = bit ^ bprev;
         bprev = bit;
         mask = 0 - (uint64_t)swap;
-        swap_points(Q, R, mask);
+        cswap(Q, R, mask);
         xDBLADD(Q, R, Q, R, Pcopy, A24);
     }
 
-    swap_points(Q, R, (0 - (uint64_t)bit));
+    cswap(Q, R, (0 - (uint64_t)bit));
+
 #else
 
     while(--nbits && !mp_U512_bit(k, nbits));
@@ -624,11 +631,48 @@ void xMUL(proj_point_t Q, const proj_point_t A,  proj_point_t P, const UINT512_t
 #endif
 }
 
+void xMUL_non_const(proj_point_t Q, const proj_point_t A,  proj_point_t P, const UINT512_t k)
+{
+    proj_point_t R, tmp, A24, Pcopy;
+    fp_cpy(P->X, R->X);
+    fp_cpy(P->Z, R->Z);
+
+    fp_cpy(P->X, Pcopy->X);
+    fp_cpy(P->Z, Pcopy->Z);
+
+    fp_cpy(one_Mont, Q->X);
+    fp_cpy(zero, Q->Z);
+
+    fp_add_512(A->Z, A->Z, A24->X);
+    fp_add_512(A24->X, A24->X, A24->Z);
+    fp_add_512(A24->X, A->X, A24->X);
+
+    int bit, nbits = 512;
+    
+    while(--nbits && !mp_U512_bit(k, nbits));
+
+    do
+    {
+        bit = mp_U512_bit(k, nbits);
+        if(bit)
+        {
+            fp_cpy(Q->X, tmp->X);fp_cpy(Q->Z, tmp->Z);
+            fp_cpy(R->X, Q->X);fp_cpy(R->Z, Q->Z);
+            fp_cpy(tmp->X, R->X);fp_cpy(tmp->Z, R->Z);
+        }
+        xDBLADD(Q, R, Q, R, Pcopy, A24);
+        if(bit)
+        {
+            fp_cpy(Q->X, tmp->X);fp_cpy(Q->Z, tmp->Z);
+            fp_cpy(R->X, Q->X);fp_cpy(R->Z, Q->Z);
+            fp_cpy(tmp->X, R->X);fp_cpy(tmp->Z, R->Z);
+        }
+    } while (nbits--);
+
+}
+
 void xISOG(proj_point_t A, proj_point_t P, const proj_point_t K, const uint64_t k)
 {
-    assert (k >= 3);
-    assert (k % 2 == 1);
-
     felm_t tmp0, tmp1;
     felm_t T[4];
     fp_cpy(K->Z, T[0]);
@@ -683,33 +727,22 @@ void xISOG(proj_point_t A, proj_point_t P, const proj_point_t K, const uint64_t 
     }
 
     fp_mul_mont_512(T[0], T[1], T[0]);
-    fp_add_512(T[0], T[0], T[0]); // multiplication by 2 
-
+    fp_add_512(T[0], T[0], T[0]); 
     fp_sqr_mont_512(T[1], T[1]);
-
     fp_mul_mont_512(T[2], T[3], T[2]);
-    fp_add_512(T[2], T[2], T[2]); // multiplication by 2 
-
+    fp_add_512(T[2], T[2], T[2]); 
     fp_sqr_mont_512(T[3], T[3]);
-
-    // Ax := T[1] * T[3] * Ax - 3 * Az * (T[1] * T[2] - T[0] * T[3]) 
     fp_mul_mont_512(T[1], T[2], tmp0);
     fp_mul_mont_512(T[0], T[3], tmp1);
     fp_sub_512(tmp0, tmp1, tmp0);
     fp_mul_mont_512(tmp0, A->Z, tmp0);
     fp_add_512(tmp0, tmp0, tmp1); 
-    fp_add_512(tmp0, tmp1, tmp0); // multiplication by 3 
-
+    fp_add_512(tmp0, tmp1, tmp0);
     fp_mul_mont_512(T[1], T[3], tmp1);
     fp_mul_mont_512(tmp1, A->X, tmp1);
-
     fp_sub_512(tmp1, tmp0, A->X);
-
-    // Az := Az * T[3]^2 
     fp_sqr_mont_512(T[3], T[3]);
     fp_mul_mont_512(A->Z, T[3], A->Z);
-
-    // X := X * Xim^2, Z := Z * Zim^2 
     fp_sqr_mont_512(Q->X, Q->X);
     fp_sqr_mont_512(Q->Z, Q->Z);
     fp_mul_mont_512(P->X, Q->X, P->X);

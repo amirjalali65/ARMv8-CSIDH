@@ -9,7 +9,11 @@ CROSS_FLAGS= -static
 
 # Default value set to non-constant time implementation
 ifeq "$(CONSTANT)" "TRUE"
+	ifeq "$(FASTLADDER)" "TRUE"
+	CONST=-D _CONSTANT_ -D _FASTLADDER_
+	else
 	CONST=-D _CONSTANT_
+	endif
 endif
 
 ifeq "$(DEBUG)" "TRUE"

@@ -34,8 +34,8 @@ static void cofactor_multiples(proj_point_t *P, const proj_point_t A, size_t low
     for (size_t i = mid; i < upper; ++i)
         mp_mul_u64(cl, smallprimes[i], cl);
 
-    xMUL(P[mid], A, P[lower], cu);
-    xMUL(P[lower], A, P[lower], cl);
+    xMUL_non_const(P[mid], A, P[lower], cu);
+    xMUL_non_const(P[lower], A, P[lower], cl);
 
     cofactor_multiples(P, A, lower, mid);
     cofactor_multiples(P, A, mid, upper);
@@ -72,7 +72,7 @@ bool csidh_validate(const public_key_t in)
 
                 mp_U512_set_zero(t);
                 t[0] = smallprimes[i];
-                xMUL(P[i], A, P[i], t);
+                xMUL_non_const(P[i], A, P[i], t);
 
                 if (memcmp(P[i]->Z, zero, sizeof(felm_t)))
                     /* P does not have order dividing p+1. */
@@ -131,17 +131,20 @@ static void action(const public_key_t in, const private_key_t priv, public_key_t
     {
         t = (int8_t) (priv->exponents[i / 2] << i % 2 * 4) >> 4;
 
-        if (t > 0) {
+        if (t > 0) 
+        {
             e[0][i] = t;
             e[1][i] = 0;
             mp_mul_u64(k[1], smallprimes[i], k[1]);
         }
-        else if (t < 0) {
+        else if (t < 0)
+        {
             e[1][i] = -t;
             e[0][i] = 0;
             mp_mul_u64(k[0], smallprimes[i], k[0]);
         }
-        else {
+        else 
+        {
             e[0][i] = 0;
             e[1][i] = 0;
             mp_mul_u64(k[0], smallprimes[i], k[0]);
@@ -163,7 +166,7 @@ static void action(const public_key_t in, const private_key_t priv, public_key_t
     unsigned int z_is_zero;
     uint64_t correction;
 
-    for(count = 0; count < 35; count++) 
+    for(count = 0; count <= UPPER_BOUND; count++) 
     {
         fp_cpy(A->X, bigA->X);
         fp_random_512(P->X);
@@ -172,10 +175,11 @@ static void action(const public_key_t in, const private_key_t priv, public_key_t
         get_mont_rhs(A->X, P->X, rhs);
         sign = !fp_issquare(rhs);
 
-        xMUL(P, A, P, k[sign]);
+        xMUL_non_const(P, A, P, k[sign]);
 
         done[sign] = true;
-
+    
+    
         for (size_t i = 0; i < SMALL_PRIMES_COUNT; ++i) 
         {
             fp_cpy(A->X, AA->X);
@@ -191,19 +195,13 @@ static void action(const public_key_t in, const private_key_t priv, public_key_t
                 correction = mask * (smallprimes[j] - 1);
                 mp_mul_u64(cof, (smallprimes[j] - correction), cof);
             }
-            xMUL(K, A, P, cof);
-            fp_cpy(A->X, Acpy->X);
-            fp_cpy(A->Z, Acpy->Z);
-            fp_cpy(P->X, Pcpy->X);
-            fp_cpy(P->Z, Pcpy->Z);
+            xMUL_non_const(K, A, P, cof);
 
             z_is_zero = !memcmp(K->Z, zero, sizeof(felm_t));
 
             xISOG(A, P, K, smallprimes[i]);
-            swap_points(A, Acpy, (0 - (uint64_t)z_is_zero));
-            swap_points(P, Pcpy, (0 - (uint64_t)z_is_zero));
-            swap_points(A, AA, (0 - (uint64_t)!esign_mask));
-            swap_points(P, PP, (0 - (uint64_t)!esign_mask));
+            cswap(A, AA, (0 - (uint64_t)(z_is_zero | !esign_mask)));
+            cswap(P, PP, (0 - (uint64_t)(z_is_zero | !esign_mask)));
 
             mask = (--e[sign][i] | (bool)z_is_zero);
             mask = (mask | !esign_mask);
@@ -218,12 +216,14 @@ static void action(const public_key_t in, const private_key_t priv, public_key_t
         fp_mul_mont_512(A->X, A->Z, A->X);
         fp_cpy(one_Mont, A->Z);     
         donemask ^= donemask;   
-        swap_points(A, bigA, (0 - (uint64_t)donemask));
+        cswap(A, bigA, (0 - (uint64_t)donemask));
         donemask = (done[0] & done[1]);
     } 
 #else
+        int counter = 0;
         do
-        {
+        {   
+            counter ++;
             fp_random_512(P->X);
             fp_cpy(one_Mont, P->Z);
             
@@ -266,6 +266,10 @@ static void action(const public_key_t in, const private_key_t priv, public_key_t
             fp_cpy(one_Mont, A->Z);     
         }
         while(!(done[0] && done[1]));
+        if(counter > 50)
+        {
+            printf("%d\n", counter);
+        }
 #endif
     fp_cpy(A->X, out->A);
 }
@@ -314,7 +318,6 @@ void csidh_keypair(private_key_t priv, public_key_t pub)
         }
     }
 #endif
-
     // Generate Public-key
     action(base_curve, priv, pub);
 }

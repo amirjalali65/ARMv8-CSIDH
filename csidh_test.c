@@ -41,6 +41,7 @@ int csidh_test()
     {
         csidh_keypair(alice_priv, alice_pub);
         csidh_keypair(bob_priv, bob_pub);
+
         valid = csidh_validate(bob_pub);
         valid = csidh_validate(alice_pub);
         csidh_sharedsecret(bob_pub, alice_priv, alice_shared);
@@ -49,6 +50,7 @@ int csidh_test()
         if(memcmp(alice_shared, bob_shared, NWORDS_64 * 8) != 0)
         {
             passed = false;
+            fp_print(alice_shared->A);fp_print(bob_shared->A);
             break;    
         }
     }
