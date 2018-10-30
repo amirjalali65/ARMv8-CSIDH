@@ -18,7 +18,7 @@ Simply use `make` in the terminal:
 $ make 
 ```
 ### Constant-time Executable
-Simply use `make` in the terminal:
+Use the following command in the terminal:
 ```sh
 $ make CONSTANT=TRUE 
 ```
