@@ -4,7 +4,7 @@
 OPTIMIZATION = -O3
 
 # Default cross-sompiler 
-CC=aarch64-linux-gnu-gcc-7
+CC=aarch64-linux-gnu-gcc
 CROSS_FLAGS= -static
 
 # Default value set to non-constant time implementation

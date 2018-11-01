@@ -175,7 +175,7 @@ static void action(const public_key_t in, const private_key_t priv, public_key_t
         get_mont_rhs(A->X, P->X, rhs);
         sign = !fp_issquare(rhs);
 
-        xMUL_non_const(P, A, P, k[sign]);
+        xMUL(P, A, P, k[sign]);
 
         done[sign] = true;
     
@@ -195,7 +195,7 @@ static void action(const public_key_t in, const private_key_t priv, public_key_t
                 correction = mask * (smallprimes[j] - 1);
                 mp_mul_u64(cof, (smallprimes[j] - correction), cof);
             }
-            xMUL_non_const(K, A, P, cof);
+            xMUL(K, A, P, cof);
 
             z_is_zero = !memcmp(K->Z, zero, sizeof(felm_t));
 
@@ -220,10 +220,8 @@ static void action(const public_key_t in, const private_key_t priv, public_key_t
         donemask = (done[0] & done[1]);
     } 
 #else
-        int counter = 0;
         do
         {   
-            counter ++;
             fp_random_512(P->X);
             fp_cpy(one_Mont, P->Z);
             
@@ -266,10 +264,6 @@ static void action(const public_key_t in, const private_key_t priv, public_key_t
             fp_cpy(one_Mont, A->Z);     
         }
         while(!(done[0] && done[1]));
-        if(counter > 50)
-        {
-            printf("%d\n", counter);
-        }
 #endif
     fp_cpy(A->X, out->A);
 }

@@ -588,8 +588,10 @@ void xMUL(proj_point_t Q, const proj_point_t A,  proj_point_t P, const UINT512_t
 #ifdef _CONSTANT_
 
     #ifdef _FASTLADDER_
-        while(--nbits && !mp_U512_bit(k, nbits));
-        xDBL(Q, A, P);
+        while(nbits && !mp_U512_bit(k, nbits)) nbits--;
+        xDBL(R, A, P);
+        fp_cpy(P->X, Q->X);
+        fp_cpy(P->Z, Q->Z);
     #endif
 
     int i, swap, bprev = 0;

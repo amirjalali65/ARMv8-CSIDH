@@ -6,7 +6,7 @@
 #include <time.h>
 
 #define BENCH_COUNT     10
-#define TEST_COUNT      10
+#define TEST_COUNT      5
 
 int64_t cpucycles(void)
 { // Access system counter for benchmarking

@@ -12,20 +12,19 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-//////////////////  Parameters ///////////////////////////
-
+////////////////// Implementation Parameters ///////////////////////////
 #define SMALL_PRIMES_COUNT  74
 #define NWORDS_64           8
 #define MAX_EXPONENT        5
-#define UPPER_BOUND         52
+#define UPPER_BOUND         50
 
 uint64_t prime511[NWORDS_64];
 uint64_t one_Mont[NWORDS_64];
 const uint64_t smallprimes[SMALL_PRIMES_COUNT];
 const uint64_t four_sqrt_p[8];
 uint64_t zero[NWORDS_64];
-//////////////////  Datatypes  ///////////////////////////
 
+//////////////////  Datatypes  ///////////////////////////
 // Datatype for representing 512-bit integer
 typedef uint64_t UINT512_t[NWORDS_64];
 
@@ -51,7 +50,6 @@ typedef proj_point proj_point_t[1];
 typedef proj_coeff proj_coeff_t[1];
 
 ///////////////////  Integer Arithmetic ////////////////////
-
 bool mp_add_512(const uint64_t *a, const uint64_t *b, uint64_t *c);
 
 unsigned int mp_sub_512(const uint64_t *a, const uint64_t *b, uint64_t *c);
@@ -65,7 +63,6 @@ void mp_U512_set_one(uint64_t *a);
 int mp_U512_bit(const uint64_t *a, uint64_t k);
 
 ///////////////////  Field Arithmetic  /////////////////////
-
 void fp_random_512(uint64_t *a);
 
 void fp_add_512(const uint64_t *a, const uint64_t *b, uint64_t *c);
