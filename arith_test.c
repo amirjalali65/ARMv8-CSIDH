@@ -18,7 +18,7 @@
 int test_fp_arithmetic()
 {
     int i, passed = 1;
-    felm_t a, b, acpy, bcpy, c, d, c1, c2, c3, c4;
+    felm_t a={0}, b={0}, acpy={0}, bcpy={0}, c={0}, d={0}, c1={0}, c2={0}, c3={0}, c4={0};
 
     for(i = 0; i < TEST_LOOP; i++)
     {
@@ -54,15 +54,17 @@ int test_fp_arithmetic()
         if(memcmp(c2, c3, 64) != 0)
             passed = 0;
 
+        fp_init_one(c);
         fp_cpy(c, d);
         fp_inv(c);
         fp_mul_mont_512(c, d, c1);
+        fp_mul_mont_512(c1, one_Mont, c1);
         if(memcmp(c1, one_Mont, 64) != 0)
+        {
+            fp_print(c1);
+            fp_print(one_Mont);
             passed = 0;
-
-        from_mont(a, a);from_mont(b, b);
-        if(memcmp(a, acpy, 64) != 0 || memcmp(b, bcpy, 64) != 0)
-            passed = 0;
+        }
     }
 
 

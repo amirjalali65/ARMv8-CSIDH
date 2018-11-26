@@ -566,7 +566,10 @@ int mp_U512_bit(const uint64_t *a, uint64_t k)
 }
 
 // Montgomery ladder implementation 
-// Constant-time and non constant-time
+// Three different versions is included: 
+// 1-Constant-time
+// 2-Uniform variable-time
+// 3-Variable-time
 void xMUL(proj_point_t Q, const proj_point_t A,  proj_point_t P, const UINT512_t k)
 {
     proj_point_t R, tmp, A24, Pcopy;
@@ -583,7 +586,7 @@ void xMUL(proj_point_t Q, const proj_point_t A,  proj_point_t P, const UINT512_t
     fp_add_512(A24->X, A24->X, A24->Z); // 4C
     fp_add_512(A24->X, A->X, A24->X);   // A + 2C
 
-    int bit, nbits = 511;
+    int bit = 0, nbits = 511;
 
 #ifdef _CONSTANT_
 

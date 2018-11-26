@@ -35,7 +35,7 @@ The generated executable is `CSIDH_TEST` and can be run on ARMv8 cores.
 
 ## Contributors
 The constant-time implementation as well as optimized finite field arithmetic are designed and developed by Amir Jalali (ajalali2016@fau.edu).
-The variable-time implementation and key validation is designed by minor modifications to the CSIDH proof-of-concept implementation by Castryck et al.
+The variable-time implementation and key validation is designed with minor modifications based on the CSIDH proof-of-concept implementation by Castryck et al. The field arithmetic implementation is designed for ARMv8 processors.
 
 
 

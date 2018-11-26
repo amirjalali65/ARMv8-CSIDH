@@ -162,7 +162,7 @@ static void action(const public_key_t in, const private_key_t priv, public_key_t
 #ifdef _CONSTANT_
     int count;
     bool donemask, sign, mask, esign_mask;
-    proj_point_t bigA, AA, PP, K, Acpy, Pcpy;
+    proj_point_t bigA, AA, PP, K;
     unsigned int z_is_zero;
     uint64_t correction;
 

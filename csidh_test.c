@@ -5,8 +5,8 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define BENCH_COUNT     10
-#define TEST_COUNT      5
+#define BENCH_COUNT     1
+#define TEST_COUNT      1
 
 int64_t cpucycles(void)
 { // Access system counter for benchmarking
