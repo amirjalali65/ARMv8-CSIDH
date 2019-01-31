@@ -1,4 +1,4 @@
-# ARMv8-CSIDH
+# ARMv8-CSIDH v1.0
 Optimized and Constant-time implementation of Post-Quantum Commutative Supersingular Isogeny Diffie-Hellman (CSIDH) key exchange on ARMv8 Processors.
 
 This repository contains an highly-optimized implementation of CSIDH on ARMv8 processors. The finite field arithmetic is designed and engineered for the p511 prime proposed in the original [CSIDH](https://eprint.iacr.org/2018/383.pdf) scheme by Castryck et al. 
